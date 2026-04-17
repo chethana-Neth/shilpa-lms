@@ -21,6 +21,10 @@ import grade9Img from './Grade9.png'
 import grade10Img from './Grade10.png'
 import grade11Img from './Grade11.png'
 import profile_img1 from  './profile_img1.png'
+import patients_icon from './patients_icon.svg'
+import appointments_icon from './appointments_icon.svg'
+import earning_icon from './earning_icon.svg'
+import file_upload_icon from './file_upload_icon.svg'
 
 export const assets = {
     icon,
@@ -45,7 +49,11 @@ export const assets = {
     grade9Img,
     grade10Img,
     grade11Img,
-    profile_img1
+    profile_img1,
+    patients_icon,
+    appointments_icon,
+    earning_icon,
+    file_upload_icon
 
 
 }
@@ -137,41 +145,40 @@ export const dummyStudentEnrolled = [
     {
         "student": {
             "_id": "user_2qQlvXyr02B4Bq6hT0Gvaa5fT9V",
-            
+            "name": "Chethana",
             "imageUrl": ""
         },
-        "courseTitle": "Grade 6 Information and Communication Technology",
-        "purchaseDate": "2025-12-20T08:39:55.509Z"
+        "courseTitle": "Introduction to JavaScript",
+        "purchaseDate": "2024-12-20T08:39:55.509Z"
     },
     {
         "student": {
             "_id": "user_2qQlvXyr02B4Bq6hT0Gvaa5fT9V",
-            
+            "name": "Chethana",
             "imageUrl": ""
         },
-        "courseTitle": "Grade 6 Information and Communication Technology",
-        "purchaseDate": "2025-12-20T08:59:49.964Z"
+        "courseTitle": "Introduction to JavaScript",
+        "purchaseDate": "2024-12-20T08:59:49.964Z"
     },
     {
         "student": {
             "_id": "user_2qQlvXyr02B4Bq6hT0Gvaa5fT9V",
-           
+            "name": "Chethana",
             "imageUrl": ""
         },
-        "courseTitle": "Grade 7 Information and Communication Technology",
-        "purchaseDate": "2025-12-20T11:03:42.931Z"
+        "courseTitle": "Advanced Python Programming",
+        "purchaseDate": "2024-12-20T11:03:42.931Z"
     },
     {
         "student": {
             "_id": "user_2qQlvXyr02B4Bq6hT0Gvaa5fT9V",
-            
+            "name": "Chethana",
             "imageUrl": ""
         },
-        "courseTitle": "Grade 8 Information and Communication Technology",
-        "purchaseDate": "2025-12-20T11:04:48.798Z"
+        "courseTitle": "Web Development Bootcamp",
+        "purchaseDate": "2024-12-20T11:04:48.798Z"
     }
 ]
-
 
 
 export const dummyCourses = [
