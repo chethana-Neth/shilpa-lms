@@ -1,6 +1,7 @@
 // server/controllers/userController.js
 const User = require('../models/userModel');
 
+//Get all users
 const getAllUsers = (req, res) => {
     User.getAll((err, data) => {
         if (err) {

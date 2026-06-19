@@ -25,19 +25,25 @@ const Register = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) return alert("Please enter a valid email address");
     if (formData.password.length < 6) return alert("Password must be at least 6 characters");
+
+const passwordStrengthRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/;
+if (!passwordStrengthRegex.test(formData.password)) {
+  return alert("Password must contain at least one uppercase letter, one lowercase letter, one number, and one symbol (@$!%*?&#)");
+}
     if (formData.password !== formData.confirmPassword) return alert("Passwords do not match!");
 
     try {
       const response = await axios.post('http://localhost:8081/api/auth/register', formData);
 
       if (response.data.Status === "Success") {
-        alert("Registration Successful! Please login to continue.");
+        // Show appropriate message based on account status
+        if (response.data.status === 'pending') {
+          alert("Registration submitted! Your account is pending admin approval. You'll be notified once approved.");
+        } else {
+          alert("Registration Successful! Please login to continue.");
+        }
 
-        // Close register modal
         setShowRegister(false);
-        setShowLogin(false); // Ensure login modal is also closed to prevent double render
-
-        // ✅ Navigate to login page and replace history to prevent "back to blank"
         navigate('/login', { replace: true });
       } else {
         alert("Registration failed: " + (response.data.Error || "Error"));
@@ -67,6 +73,7 @@ const Register = () => {
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
+          {/* USERNAME */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Username:</label>
             <input
@@ -77,6 +84,7 @@ const Register = () => {
             />
           </div>
 
+          {/* EMAIL */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email:</label>
             <input
@@ -87,6 +95,7 @@ const Register = () => {
             />
           </div>
 
+          {/* PASSWORD + CONFIRM PASSWORD */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password:</label>
@@ -108,6 +117,7 @@ const Register = () => {
             </div>
           </div>
 
+          {/* ROLE DROPDOWN */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Role:</label>
             <select

@@ -15,4 +15,12 @@ const verifyJWT = (req, res, next) => {
     });
 };
 
-module.exports = { verifyJWT, JWT_SECRET };
+// Middleware to check if user is Admin
+const isAdmin = (req, res, next) => {
+    if (req.userRole !== 'Admin') {
+        return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+    next();
+};
+
+module.exports = { verifyJWT, isAdmin, JWT_SECRET };

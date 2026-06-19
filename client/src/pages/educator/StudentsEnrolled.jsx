@@ -1,53 +1,122 @@
-import React, { useState, useEffect } from 'react' // Added useState here
-import { assets, dummyDashboardData, dummyStudentEnrolled } from '../../assets/assets'
+import React, { useState, useEffect, useContext } from 'react'
+import { AppContext } from '../../context/AppContext'
 import Loading from '../../components/student/Loading'
+import axios from 'axios'
 
 const StudentsEnrolled = () => {
-  // Fixed state initialization
+  const { backendUrl, userData, currency } = useContext(AppContext)
   const [enrolledStudents, setEnrolledStudents] = useState(null)
 
   const fetchEnrolledStudents = async () => {
-      // It is standard practice to name the setter 'setEnrolledStudents'
-      setEnrolledStudents(dummyStudentEnrolled)
-  }
+    const educatorId = userData?.id;
+    if (!educatorId) return;
+
+    try {
+      const { data } = await axios.get(
+        `${backendUrl}/api/enrollments/students/${educatorId}`
+      );
+      if (data.success) {
+        setEnrolledStudents(data.enrolledStudents);
+      } else {
+        setEnrolledStudents([]);
+      }
+    } catch (error) {
+      console.error("Fetch students error:", error);
+      setEnrolledStudents([]);
+    }
+  };
 
   useEffect(() => {
-    fetchEnrolledStudents()
-  }, [])
+    fetchEnrolledStudents();
+  }, [userData]);
+
+  // Calculate total revenue across all enrollments
+  const totalRevenue = enrolledStudents
+    ? enrolledStudents.reduce((sum, item) => sum + (Number(item.amountPaid) || 0), 0)
+    : 0;
 
   return enrolledStudents ? (
-    <div className='min-h-screen flex flex-col items-start justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0'>
-        <div className='flex flex-col items-center max-w-4xl w-full overflow-hidden rounded-md bg-white border border-gray-500/20'>
-          <table className='table-fixed md:table-auto w-full overflow-hidden pb-4'>
-            <thead className='text-gray-900 border-b border-gray-500/20 text-sm text-left'>
-                <tr>
-                  <th className='px-4 py-3 font-semibold text-center hidden sm:table-cell'>#</th>
-                  <th className='px-4 py-3 font-semibold'>Student Name</th>
-                  <th className='px-4 py-3 font-semibold'>Course Title</th>
-                  <th className='px-4 py-3 font-semibold hidden sm:table-cell'>Date</th>
-                </tr>
+    <div className='min-h-screen flex flex-col items-start justify-start md:p-8 p-4 pt-8'>
+      <h2 className='pb-6 text-xl font-semibold text-gray-800'>Students Enrolled</h2>
+
+      {/* Revenue summary cards - now positioned at the top */}
+      <div className='mb-8 flex gap-4'>
+        <div className='bg-white border border-gray-200 rounded-lg px-6 py-4 shadow-sm'>
+          <p className='text-xs text-gray-500 mb-1 uppercase font-medium tracking-wider'>Total Students</p>
+          <p className='text-2xl font-bold text-gray-800'>{enrolledStudents.length}</p>
+        </div>
+        <div className='bg-white border border-gray-200 rounded-lg px-6 py-4 shadow-sm'>
+          <p className='text-xs text-gray-500 mb-1 uppercase font-medium tracking-wider'>Total Revenue</p>
+          <p className='text-2xl font-bold text-green-700'>
+            {currency}{totalRevenue.toFixed(2)}
+          </p>
+        </div>
+      </div>
+
+      {/* Table Container */}
+      <div className='flex flex-col items-center max-w-5xl w-full overflow-hidden rounded-lg bg-white border border-gray-200 shadow-sm'>
+        {enrolledStudents.length === 0 ? (
+          <div className='p-10 text-gray-500'>No students have enrolled in your courses yet.</div>
+        ) : (
+          <table className='table-fixed md:table-auto w-full overflow-hidden'>
+            <thead className='text-gray-900 bg-gray-50 border-b border-gray-200 text-sm text-left'>
+              <tr>
+                <th className='px-4 py-4 font-semibold text-center hidden sm:table-cell w-16'>#</th>
+                <th className='px-4 py-4 font-semibold'>Student Name</th>
+                <th className='px-4 py-4 font-semibold hidden md:table-cell'>Email</th>
+                <th className='px-4 py-4 font-semibold'>Course Title</th>
+                <th className='px-4 py-4 font-semibold hidden sm:table-cell'>Amount Paid</th>
+                <th className='px-4 py-4 font-semibold hidden sm:table-cell'>Enrolled On</th>
+              </tr>
             </thead>
-            <tbody>
-              {enrolledStudents.map((item, index)=>(
-                <tr key={index} className='border-b border-gray-500/20'>
-                  <td className='px-4 py-3 text-center hidden sm:table-cell'>{index + 1}</td>
-                  <td className='md:px-4 px-2 py-3 flex items-center space-x-3'>
-                    <img
-                    src={item.student.imageUrl}
-                    alt=""
-                    className='w-9 h-9 rounded-full'
-                    />
-                    <span className='truncate'>{item.student.name}</span>
+            <tbody className='text-sm text-gray-600'>
+              {enrolledStudents.map((item, index) => (
+                <tr key={index} className='border-b border-gray-100 last:border-0 hover:bg-blue-50/30 transition-colors'>
+
+                  {/* Row number */}
+                  <td className='px-4 py-4 text-center hidden sm:table-cell text-gray-400'>
+                    {index + 1}
                   </td>
-                  <td className='px-4 py-3 truncate'>{item.courseTitle}</td>
-                  <td className='px-4 py-3 hidden sm:table-cell'>{new Date(item.purchaseDate).toLocaleDateString()}</td>
+
+                  {/* Student avatar + name */}
+                  <td className='md:px-4 px-2 py-4 flex items-center space-x-3'>
+                    <div className='w-9 h-9 rounded-full bg-red-800 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0'>
+                      {item.studentName?.charAt(0).toUpperCase() || 'S'}
+                    </div>
+                    <span className='truncate font-medium text-gray-800'>{item.studentName}</span>
+                  </td>
+
+                  {/* Email */}
+                  <td className='px-4 py-4 truncate text-gray-500 hidden md:table-cell'>
+                    {item.studentEmail}
+                  </td>
+
+                  {/* Course title */}
+                  <td className='px-4 py-4 truncate'>{item.courseTitle}</td>
+
+                  {/* Amount paid */}
+                  <td className='px-4 py-4 hidden sm:table-cell'>
+                    {item.amountPaid
+                      ? <span className='text-green-700 font-semibold'>
+                          {currency}{Number(item.amountPaid).toFixed(2)}
+                        </span>
+                      : <span className='text-gray-400 text-xs'>—</span>
+                    }
+                  </td>
+
+                  {/* Enrolled date */}
+                  <td className='px-4 py-4 hidden sm:table-cell text-gray-500'>
+                    {new Date(item.purchaseDate).toLocaleDateString()}
+                  </td>
+
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        )}
+      </div>
     </div>
-  ) : <Loading/>
+  ) : <Loading />
 }
 
 export default StudentsEnrolled

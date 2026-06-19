@@ -1,77 +1,143 @@
-import React, { useContext } from 'react'
-import { Route, Routes, useMatch, Navigate } from 'react-router-dom'
-import { AppContext } from './context/AppContext'
+import React, { useContext, useEffect } from 'react';
+import { Route, Routes, useMatch, Navigate, useLocation } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { AppContext } from './context/AppContext';
 
-// Page imports
-import Home from './pages/student/Home'
-import CoursesList from './pages/student/CoursesList'
-import CourseDetails from './pages/student/CourseDetails'
-import MyEnrollments from './pages/student/MyEnrollments'
-import Player from './pages/student/Player'
-import Loading from './components/student/Loading'
-import Educator from './pages/educator/Educator'
-import Dashboard from './pages/educator/Dashboard'
-import AddCourse from './pages/educator/AddCourse'
-import MyCourses from './pages/educator/MyCourses'
-import StudentsEnrolled from './pages/educator/StudentsEnrolled'
-import Navbar from './components/student/Navbar'
-import Login from './pages/login'
+// Student pages
+import Home from './pages/student/Home';
+import CoursesList from './pages/student/CoursesList';
+import CourseDetails from './pages/student/CourseDetails';
+import MyEnrollments from './pages/student/MyEnrollments';
+import Player from './pages/student/Player';
+import TakeQuiz from './pages/student/TakeQuiz';
+import SubmitAssignment from './pages/student/SubmitAssignment';
+
+// Educator pages
+import Educator from './pages/educator/Educator';
+import Dashboard from './pages/educator/Dashboard';
+import AddCourse from './pages/educator/AddCourse';
+import EditCourse from './pages/educator/EditCourse';
+import MyCourses from './pages/educator/MyCourses';
+import StudentsEnrolled from './pages/educator/StudentsEnrolled';
+import AddQuiz from './pages/educator/AddQuiz';
+import AddAssignment from './pages/educator/AddAssignment';
+import EditQuiz from './pages/educator/EditQuiz';                 // NEW
+import EditAssignment from './pages/educator/EditAssignment';     // NEW
+
+// Admin pages
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import PendingEducators from './pages/admin/PendingEducators';
+import AdminAnalytics from './pages/admin/AdminAnalytics';        // NEW
+
+// Auth pages
+import Login from './pages/login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+
+// Shared
+import Loading from './components/student/Loading';
+import Navbar from './components/student/Navbar';
 import "quill/dist/quill.snow.css";
 
 const App = () => {
-  const { userData, isLoggedin, showLogin, showRegister } = useContext(AppContext);
+  const { userData, isLoggedin } = useContext(AppContext);
+  const location = useLocation();
 
-  const isEducatorRoute = useMatch('/educator/*')
-  const isAuthPageRoute = useMatch('/login') || useMatch('/register');
+  const isEducatorRoute = useMatch('/educator/*');
+  const isLoginRoute = useMatch('/login');
+  const isRegisterRoute = useMatch('/register');
+  const isForgotPasswordRoute = useMatch('/forgot-password');
+  const isResetPasswordRoute = useMatch('/reset-password/*');
 
-  // FIX: Removed the global "return <Loading />" that was causing the blank screen.
-  // We only show loading inside the protected routes now.
+  const isAuthPageRoute = isLoginRoute || isRegisterRoute ||
+                         isForgotPasswordRoute || isResetPasswordRoute;
+
+  useEffect(() => {
+    console.log('App rendered:', {
+      pathname: location.pathname,
+      isAuthPageRoute,
+      isLoggedin,
+      userData: userData?.role
+    });
+  }, [location.pathname, isAuthPageRoute, isLoggedin, userData]);
+
+  const showNavbar = !isEducatorRoute && !isAuthPageRoute;
 
   return (
     <div className='text-default min-h-screen bg-white'>
-      {/* Show Navbar only if not on Educator or direct Auth pages */}
-      {!isEducatorRoute && !isAuthPageRoute && <Navbar/>}
+      <ToastContainer position="top-right" autoClose={3000} />
 
-      {/* Render modals only if NOT on the explicit /login or /register page */}
-      {!isAuthPageRoute && showLogin && <Login />}
-      {!isAuthPageRoute && showRegister && <Register />}
+      {showNavbar && <Navbar />}
 
       <Routes>
+        {/* Student routes */}
         <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         <Route path="/course-list" element={<CoursesList />} />
         <Route path="/course-list/:input" element={<CoursesList />} />
         <Route path="/course/:id" element={<CourseDetails />} />
         <Route path="/my-enrollments" element={<MyEnrollments />} />
         <Route path="/player/:courseId" element={<Player />} />
         <Route path="/loading/:path" element={<Loading />} />
+        <Route path="/quiz/:quizId" element={<TakeQuiz />} />
+        <Route path="/assignment/:assignmentId" element={<SubmitAssignment />} />
 
-        <Route 
-          path="/educator" 
+        {/* Auth routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+
+        {/* Admin routes (with layout) */}
+        <Route
+          path="/admin"
           element={
-            localStorage.getItem('token') && !userData ? (
-              <Loading /> // Only block the Educator page while loading user data
+            isLoggedin && userData?.role === 'Admin' ? (
+              <AdminLayout />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        >
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="pending-educators" element={<PendingEducators />} />
+          <Route path="analytics" element={<AdminAnalytics />} />
+        </Route>
+
+        {/* Educator routes – only for role 'educator' */}
+        <Route
+          path="/educator"
+          element={
+            !userData ? (
+              <Loading />
             ) : isLoggedin && userData ? (
-              userData.role === 'educator' || userData.role === 'Admin' ? (
+              userData.role === 'educator' ? (
                 <Educator />
               ) : (
-                <Navigate to="/" /> 
+                <Navigate to="/" />
               )
             ) : (
-              <Navigate to="/login" /> 
+              <Navigate to="/login" />
             )
-          } 
+          }
         >
           <Route path="" element={<Dashboard />} />
           <Route path="add-course" element={<AddCourse />} />
+          <Route path="edit-course/:id" element={<EditCourse />} />
           <Route path="my-courses" element={<MyCourses />} />
           <Route path="student-enrolled" element={<StudentsEnrolled />} />
+          <Route path="add-quiz/:lectureId" element={<AddQuiz />} />
+          <Route path="add-assignment/:lectureId" element={<AddAssignment />} />
+          {/* NEW: Edit routes */}
+          <Route path="edit-quiz/:quizId" element={<EditQuiz />} />
+          <Route path="edit-assignment/:assignmentId" element={<EditAssignment />} />
         </Route>
       </Routes>
     </div>
-  )
-}
+  );
+};
 
 export default App;
