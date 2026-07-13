@@ -21,11 +21,16 @@ const AddCourse = () => {
     const [currentChapterId, setCurrentChapterId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Maps lectureId (client-side uniqid) -> the actual PDF File object.
+    // Kept separate from `chapters` state because File objects can't survive JSON.stringify.
+    const [tuteFiles, setTuteFiles] = useState({});
+
     const [lectureDetails, setLectureDetails] = useState({
         lectureTitle: '',
         lectureDurationHours: '',
         lectureUrl: '',
         isPreviewFree: false,
+        tuteFile: null,
     });
 
     const formatDuration = (minutes) => {
@@ -87,7 +92,15 @@ const AddCourse = () => {
                 chapters.map((chapter) => {
                     if (chapter.chapterId === chapterId) {
                         const updatedContent = [...chapter.chapterContent];
-                        updatedContent.splice(lectureIndex, 1);
+                        const [removed] = updatedContent.splice(lectureIndex, 1);
+                        // Clean up any attached PDF for the removed lecture
+                        if (removed?.lectureId) {
+                            setTuteFiles(prev => {
+                                const next = { ...prev };
+                                delete next[removed.lectureId];
+                                return next;
+                            });
+                        }
                         return { ...chapter, chapterContent: updatedContent };
                     }
                     return chapter;
@@ -103,6 +116,7 @@ const AddCourse = () => {
         if (!lectureDetails.lectureUrl.trim()) return toast.error("Lecture URL is required.");
 
         const durationMinutes = Math.round(hours * 60);
+        const newLectureId = uniqid();
 
         setChapters(
             chapters.map((chapter) => {
@@ -115,15 +129,22 @@ const AddCourse = () => {
                         lectureOrder: chapter.chapterContent.length > 0
                             ? chapter.chapterContent[chapter.chapterContent.length - 1].lectureOrder + 1
                             : 1,
-                        lectureId: uniqid()
+                        lectureId: newLectureId,
+                        hasTutePdf: !!lectureDetails.tuteFile, // just for showing a badge in the list below
                     };
                     return { ...chapter, chapterContent: [...chapter.chapterContent, newLecture] };
                 }
                 return chapter;
             })
         );
+
+        // Store the actual PDF File separately, keyed by the lecture's client-side id
+        if (lectureDetails.tuteFile) {
+            setTuteFiles(prev => ({ ...prev, [newLectureId]: lectureDetails.tuteFile }));
+        }
+
         setShowPopup(false);
-        setLectureDetails({ lectureTitle: '', lectureDurationHours: '', lectureUrl: '', isPreviewFree: false });
+        setLectureDetails({ lectureTitle: '', lectureDurationHours: '', lectureUrl: '', isPreviewFree: false, tuteFile: null });
     };
 
     const handleSubmit = async (e) => {
@@ -147,6 +168,12 @@ const AddCourse = () => {
             formData.append('discount', Number(discount));
             formData.append('courseThumbnail', image);
             formData.append('chapters', JSON.stringify(chapters));
+
+            // Attach each lecture's tutorial PDF, field-named so the backend
+            // can match it back to the right lecture via its client-side id.
+            Object.entries(tuteFiles).forEach(([lectureId, file]) => {
+                formData.append(`tute_${lectureId}`, file, file.name);
+            });
 
             const { data } = await axios.post(
                 `${backendUrl}/api/courses/add-course`,
@@ -234,6 +261,7 @@ const AddCourse = () => {
                                         <div key={lecture.lectureId} className='flex justify-between items-center mb-2'>
                                             <span className='text-sm'>
                                                 {lectureIndex + 1} {lecture.lectureTitle} ({formatDuration(lecture.lectureDuration)}) {lecture.isPreviewFree ? '- Free' : ''}
+                                                {lecture.hasTutePdf && <span className='ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full'>📄 PDF attached</span>}
                                             </span>
                                             <img src={assets.cross_icon} alt=""
                                                 onClick={() => handleLecture('remove', chapter.chapterId, lectureIndex)}
@@ -301,6 +329,13 @@ const AddCourse = () => {
                                 <input type="text" className='mb-3 block w-full border p-2'
                                     value={lectureDetails.lectureUrl}
                                     onChange={(e) => setLectureDetails({ ...lectureDetails, lectureUrl: e.target.value })} />
+
+                                <p className='text-sm mb-1'>Tutorial PDF (optional)</p>
+                                <input type="file" accept="application/pdf" className='mb-3 block w-full text-sm'
+                                    onChange={(e) => setLectureDetails({ ...lectureDetails, tuteFile: e.target.files[0] || null })} />
+                                {lectureDetails.tuteFile && (
+                                    <p className='text-xs text-green-600 mb-3 -mt-2'>Selected: {lectureDetails.tuteFile.name}</p>
+                                )}
 
                                 <div className='flex items-center gap-2 mb-4'>
                                     <input type="checkbox" id="isPreview"

@@ -8,6 +8,7 @@ import Footer from '../../components/student/Footer'
 import YouTube from 'react-youtube'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import Rating from '../../components/student/Rating'
 
 const CourseDetails = () => {
   const { id } = useParams()
@@ -21,6 +22,9 @@ const CourseDetails = () => {
   const [payhereReady, setPayhereReady] = useState(false)
   const [deleting, setDeleting] = useState({ quiz: null, assignment: null })
   const [completedLectureIds, setCompletedLectureIds] = useState([])
+  const [userRating, setUserRating] = useState(0)
+  const [ratingStats, setRatingStats] = useState({ average: 0, count: 0 })
+  const [ratingSubmitting, setRatingSubmitting] = useState(false)
 
   const {
     backendUrl,
@@ -74,7 +78,6 @@ const CourseDetails = () => {
     }
   }
 
-  // Fetch which lectures this student has already completed
   const fetchCompletedLectures = async () => {
     if (!userData?.id || !id) return
     try {
@@ -89,7 +92,6 @@ const CourseDetails = () => {
     }
   }
 
-  // Mark a lecture as complete
   const markLectureComplete = async (lectureId) => {
     if (!userData?.id || !lectureId) return
     if (completedLectureIds.includes(lectureId)) return
@@ -106,6 +108,48 @@ const CourseDetails = () => {
     } catch (error) {
       console.error('Error marking lecture complete:', error)
       toast.error('Failed to mark lecture as complete.')
+    }
+  }
+
+  // Fetch course rating stats + this student's existing rating
+  const fetchRatingData = async () => {
+    try {
+      const statsRes = await axios.get(`${backendUrl}/api/ratings/course/${id}`)
+      if (statsRes.data.success) {
+        setRatingStats({
+          average: parseFloat(statsRes.data.average),
+          count: statsRes.data.count
+        })
+      }
+      if (userData?.id) {
+        const myRes = await axios.get(`${backendUrl}/api/ratings/my-rating/${id}/${userData.id}`)
+        if (myRes.data.success) setUserRating(myRes.data.rating)
+      }
+    } catch (error) {
+      console.error('Error fetching ratings', error)
+    }
+  }
+
+  // Submit or update this student's rating
+  const handleRating = async (value) => {
+    if (!userData?.id) return toast.error('Please log in to rate this course.')
+    if (!hasFullAccess) return toast.error('You must be enrolled to rate this course.')
+    setRatingSubmitting(true)
+    try {
+      const { data } = await axios.post(`${backendUrl}/api/ratings/submit`, {
+        course_id: id,
+        student_id: userData.id,
+        rating: value
+      })
+      if (data.success) {
+        setUserRating(value)
+        setRatingStats({ average: parseFloat(data.average), count: data.count })
+        toast.success('Rating submitted!')
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to submit rating.')
+    } finally {
+      setRatingSubmitting(false)
     }
   }
 
@@ -172,6 +216,7 @@ const CourseDetails = () => {
       fetchLectureExtras(courseData.courseContent || [])
     }
   }, [courseData, isEducator, enrollmentInfo])
+  useEffect(() => { fetchRatingData() }, [id, userData])
 
   useEffect(() => {
     const script = document.createElement('script')
@@ -282,7 +327,7 @@ const CourseDetails = () => {
         <div className='absolute top-0 left-0 w-full h-section-height -z-1 bg-gradient-to-b from-cyan-100/70'></div>
 
         {/* Left Column */}
-        <div className='max-w-xl z-10 text-gray-500'>
+        <div className='max-w-2xl z-10 text-gray-500'>
           <h1 className='md:text-course-details-large text-course-details-small font-semibold text-gray-800'>
             {courseData.courseTitle}
           </h1>
@@ -290,18 +335,18 @@ const CourseDetails = () => {
             dangerouslySetInnerHTML={{ __html: courseData.courseDescription?.slice(0, 200) || '' }}>
           </p>
 
+          {/* Rating display — uses live ratingStats from DB */}
           <div className='flex items-center space-x-2 pt-3 pb-1 text-sm'>
-            <p>{calculateRating(courseData)}</p>
+            <p>{ratingStats.average || 0}</p>
             <div className='flex'>
               {[...Array(5)].map((_, i) => (
                 <img key={i}
-                  src={i < Math.floor(calculateRating(courseData)) ? assets.star : assets.star_blank}
+                  src={i < Math.floor(ratingStats.average) ? assets.star : assets.star_blank}
                   alt='' className='w-3.5 h-3.5' />
               ))}
             </div>
             <p className='text-blue-600'>
-              ({courseData.courseRatings ? courseData.courseRatings.length : 0}{' '}
-              {courseData.courseRatings?.length > 1 ? 'ratings' : 'rating'})
+              ({ratingStats.count} {ratingStats.count === 1 ? 'rating' : 'ratings'})
             </p>
             <p>{courseData.enrolledStudentsCount || 0}{' '}
               {(courseData.enrolledStudentsCount || 0) > 1 ? 'Students' : 'Student'}
@@ -356,31 +401,42 @@ const CourseDetails = () => {
                     <ul className='list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300'>
                       {chapter.chapterContent?.map((lecture, i) => {
                         const extras = lectureExtras[lecture.lecture_id] || {}
-                        const isPreview = lecture.isPreviewFree
+                        const isPreview = !!lecture.isPreviewFree
                         const isCompleted = completedLectureIds.includes(lecture.lecture_id)
                         return (
                           <li key={i} className='py-3 border-b border-gray-100 last:border-0'>
                             <div className='flex flex-col gap-2'>
 
                               {/* Lecture title and controls row */}
-                              <div className='flex items-center justify-between flex-wrap gap-2'>
-                                <div className='flex items-center gap-2'>
-                                  {/* Show tick if completed, play icon otherwise */}
+                              <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2'>
+                                <div className='flex items-center gap-2 min-w-0'>
                                   <img
                                     src={isCompleted ? assets.blue_tick_icon : assets.play_icon}
                                     alt='status icon'
-                                    className='w-4 h-4'
+                                    className='w-4 h-4 flex-shrink-0'
                                   />
-                                  <p className={`font-medium text-gray-800 ${isCompleted ? 'line-through text-gray-400' : ''}`}>
+                                  <p className={`font-medium text-gray-800 break-words ${isCompleted ? 'line-through text-gray-400' : ''}`}>
                                     {lecture.lectureTitle}
                                   </p>
                                 </div>
-                                <div className='flex gap-3 items-center text-sm flex-wrap'>
+                                <div className='flex gap-3 items-center text-sm flex-shrink-0 whitespace-nowrap'>
 
                                   {/* Preview button */}
                                   {isPreview && !hasFullAccess && !isEducator && (
                                     <button onClick={() => handlePlayLecture(lecture)}
                                       className='text-blue-500 hover:underline'>Preview</button>
+                                  )}
+
+                                  {/* Tutorial PDF - visible to anyone who can access this lecture's content */}
+                                  {lecture.tuteUrl && (isEducator || hasFullAccess || (isPreview && !hasFullAccess)) && (
+                                    <a
+                                      href={`${backendUrl}/uploads/${lecture.tuteUrl}`}
+                                      target='_blank'
+                                      rel='noopener noreferrer'
+                                      className='text-red-600 font-medium hover:underline flex items-center gap-1'
+                                    >
+                                      📄 Tutorial PDF
+                                    </a>
                                   )}
 
                                   {/* Watch + Mark Complete for enrolled students */}
@@ -544,6 +600,28 @@ const CourseDetails = () => {
             <h3 className='text-xl font-semibold text-gray-800'>Course Description</h3>
             <p className='pt-3 rich-text' dangerouslySetInnerHTML={{ __html: courseData.courseDescription || '' }}></p>
           </div>
+
+          {/* Rate this Course — only visible to enrolled students */}
+          {hasFullAccess && !isEducator && (
+            <div className='pb-10 border-t border-gray-200 pt-6'>
+              <h3 className='text-xl font-semibold text-gray-800 mb-2'>Rate this Course</h3>
+              <p className='text-sm text-gray-500 mb-3'>
+                {userRating > 0
+                  ? `Your current rating: ${userRating} star${userRating > 1 ? 's' : ''} — click to change`
+                  : 'Share your experience with other students'}
+              </p>
+              <div className='flex items-center gap-4'>
+                <Rating
+                  initialRating={userRating}
+                  onRate={handleRating}
+                />
+                {ratingSubmitting && <span className='text-sm text-gray-400'>Saving...</span>}
+                {userRating > 0 && !ratingSubmitting && (
+                  <span className='text-sm text-green-600 font-medium'>✓ Rated {userRating}/5</span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column */}
@@ -591,7 +669,7 @@ const CourseDetails = () => {
             <div className='flex items-center text-sm md:text-default gap-4 pt-2 md:pt-4 text-gray-500'>
               <div className='flex items-center gap-1'>
                 <img src={assets.star} alt='' />
-                <p>{calculateRating(courseData)}</p>
+                <p>{ratingStats.average || 0}</p>
               </div>
               <div className='h-4 w-px bg-gray-500/40'></div>
               <div className='flex items-center gap-1'>

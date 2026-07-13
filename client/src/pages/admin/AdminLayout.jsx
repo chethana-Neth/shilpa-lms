@@ -1,21 +1,31 @@
 import React, { useContext } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { AppContext } from '../../context/AppContext';
-import { HomeIcon, UserGroupIcon, AcademicCapIcon, ArrowRightStartOnRectangleIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import {
+  HomeIcon,
+  UserGroupIcon,
+  AcademicCapIcon,
+  ArrowRightStartOnRectangleIcon,
+  ChartBarIcon,
+  UserIcon,
+  CurrencyDollarIcon
+} from '@heroicons/react/24/outline';
 
 const AdminLayout = () => {
-  const { logout, userData } = useContext(AppContext);
+  const { logoutUser, userData } = useContext(AppContext);
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
+    logoutUser();
     navigate('/login');
   };
 
   const menuItems = [
-    { path: '/admin/dashboard', name: 'Dashboard', icon: HomeIcon },
-    { path: '/admin/pending-educators', name: 'Pending Educators', icon: UserGroupIcon },
-    { path: '/admin/analytics', name: 'Analytics', icon: ChartBarIcon },
+    { path: '/admin/dashboard',         name: 'Dashboard',         icon: HomeIcon           },
+    { path: '/admin/pending-educators', name: 'Pending Educators', icon: UserGroupIcon      },
+    { path: '/admin/analytics',         name: 'Analytics',         icon: ChartBarIcon       },
+    { path: '/admin/revenue',           name: 'Revenue',           icon: CurrencyDollarIcon },
+    { path: '/admin/users',             name: 'Manage Users',      icon: UserIcon           },
   ];
 
   return (

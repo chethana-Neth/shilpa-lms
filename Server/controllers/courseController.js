@@ -36,7 +36,7 @@ exports.getAllCourses = (req, res) => {
     });
 };
 
-// 2. FETCH SINGLE COURSE DETAILS (includes meetDateTime)
+// 2. FETCH SINGLE COURSE DETAILS (includes meetDateTime and tuteUrl)
 exports.getCourseDetails = (req, res) => {
     const { id } = req.params;
 
@@ -60,6 +60,7 @@ exports.getCourseDetails = (req, res) => {
                 return res.json({ success: true, courseData: { ...course, courseContent: [] } });
             }
 
+            // SELECT * automatically includes the new tuteUrl column once it's added to the table
             db.query("SELECT * FROM lectures WHERE chapter_id IN (?) ORDER BY lectureOrder ASC", [chapterIds], (err, lectures) => {
                 if (err) return res.status(500).json({ success: false, message: err.message });
 
@@ -81,7 +82,7 @@ exports.addCourse = async (req, res) => {
     try {
         console.log("addCourse called");
         console.log("req.body:", req.body);
-        console.log("req.file:", req.file);
+        console.log("req.files:", req.files);
 
         const { educator_id, courseTitle, courseDescription, coursePrice, discount, chapters } = req.body;
 
@@ -89,7 +90,7 @@ exports.addCourse = async (req, res) => {
             console.error("Missing fields — multipart body was not parsed correctly");
             return res.status(400).json({
                 success: false,
-                message: "Missing required fields. Ensure the route uses upload.single('courseThumbnail')."
+                message: "Missing required fields. Ensure the route uses the correct upload middleware."
             });
         }
 
@@ -100,7 +101,21 @@ exports.addCourse = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid chapters JSON." });
         }
 
-        const courseThumbnail = req.file ? req.file.filename : '';
+        // req.files is an array here (from upload.any()). Separate the course
+        // thumbnail from the per-lecture tutorial PDFs, which are field-named
+        // `tute_<clientLectureId>` by the frontend.
+        const filesArray = req.files || [];
+        const thumbnailFile = filesArray.find(f => f.fieldname === 'courseThumbnail');
+        const courseThumbnail = thumbnailFile ? thumbnailFile.filename : '';
+
+        // Map: client-side lectureId -> uploaded PDF filename
+        const tuteFileMap = {};
+        filesArray.forEach(f => {
+            const match = f.fieldname.match(/^tute_(.+)$/);
+            if (match) {
+                tuteFileMap[match[1]] = f.filename;
+            }
+        });
 
         const sqlCourse = `INSERT INTO courses 
             (educator_id, courseTitle, courseDescription, coursePrice, discount, courseThumbnail, isPublished) 
@@ -127,17 +142,21 @@ exports.addCourse = async (req, res) => {
 
             if (chapter.chapterContent && chapter.chapterContent.length > 0) {
                 for (const lecture of chapter.chapterContent) {
+                    // Look up the tutorial PDF for this lecture, if the educator attached one
+                    const tuteUrl = tuteFileMap[lecture.lectureId] || null;
+
                     await queryPromise(
                         `INSERT INTO lectures 
-                         (chapter_id, lectureTitle, lectureDuration, lectureUrl, isPreviewFree, lectureOrder) 
-                         VALUES (?, ?, ?, ?, ?, ?)`,
+                         (chapter_id, lectureTitle, lectureDuration, lectureUrl, isPreviewFree, lectureOrder, tuteUrl) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?)`,
                         [
                             newChapterId,
                             lecture.lectureTitle,
                             Number(lecture.lectureDuration),
                             lecture.lectureUrl,
                             lecture.isPreviewFree ? 1 : 0,
-                            lecture.lectureOrder
+                            lecture.lectureOrder,
+                            tuteUrl
                         ]
                     );
                 }
@@ -214,6 +233,15 @@ exports.deleteCourse = async (req, res) => {
                     await queryPromise("DELETE FROM quiz_attempts WHERE quiz_id = ?", [quiz.quiz_id]);
                     await queryPromise("DELETE FROM quizzes WHERE quiz_id = ?", [quiz.quiz_id]);
                 }
+
+                // Also clean up any tutorial PDF file for this lecture
+                const lectureData = await queryPromise(
+                    "SELECT tuteUrl FROM lectures WHERE lecture_id = ?", [lectureId]
+                );
+                if (lectureData[0]?.tuteUrl) {
+                    const fp = path.join(__dirname, '..', 'uploads', lectureData[0].tuteUrl);
+                    fs.unlink(fp, err => { if (err && err.code !== 'ENOENT') console.error(err); });
+                }
             }
             
             await queryPromise("DELETE FROM lectures WHERE chapter_id IN (?)", [chapterIds]);
@@ -260,8 +288,22 @@ exports.updateCourse = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid chapters JSON." });
         }
 
+        // req.files is an array here (from upload.any()). Separate the course
+        // thumbnail from the per-lecture tutorial PDFs. Frontend field-names
+        // these as tute_existing_<lecture_id> or tute_new_<clientId>.
+        const filesArray = req.files || [];
+        const thumbnailFile = filesArray.find(f => f.fieldname === 'courseThumbnail');
+
+        const tuteFileMap = {};
+        filesArray.forEach(f => {
+            const match = f.fieldname.match(/^tute_(existing_.+|new_.+)$/);
+            if (match) {
+                tuteFileMap[match[1]] = f.filename;
+            }
+        });
+
         // 1. Update course main info (with optional thumbnail)
-        if (req.file) {
+        if (thumbnailFile) {
             const courseRows = await queryPromise(
                 "SELECT courseThumbnail FROM courses WHERE _id = ?", [id]
             );
@@ -273,7 +315,7 @@ exports.updateCourse = async (req, res) => {
             }
             await queryPromise(
                 `UPDATE courses SET courseTitle=?, courseDescription=?, coursePrice=?, discount=?, courseThumbnail=? WHERE _id=?`,
-                [courseTitle, courseDescription, Number(coursePrice), Number(discount), req.file.filename, id]
+                [courseTitle, courseDescription, Number(coursePrice), Number(discount), thumbnailFile.filename, id]
             );
         } else {
             await queryPromise(
@@ -313,44 +355,61 @@ exports.updateCourse = async (req, res) => {
 
             // 4. Process lectures inside this chapter
             const existingLectures = await queryPromise(
-                "SELECT lecture_id FROM lectures WHERE chapter_id = ?",
+                "SELECT lecture_id, tuteUrl FROM lectures WHERE chapter_id = ?",
                 [chapterId]
             );
             const keptLectureIds = [];
 
             for (const newLecture of (newChapter.chapterContent || [])) {
                 if (newLecture.lecture_id && existingLectures.some(l => l.lecture_id === newLecture.lecture_id)) {
-                    // Update existing lecture
+                    // Existing lecture: figure out its tuteUrl - either a freshly
+                    // uploaded replacement, or keep whatever it already had.
+                    const uploadedTuteFilename = tuteFileMap[`existing_${newLecture.lecture_id}`];
+                    const currentRow = existingLectures.find(l => l.lecture_id === newLecture.lecture_id);
+                    const finalTuteUrl = uploadedTuteFilename || currentRow.tuteUrl || null;
+
+                    // If a new PDF replaced an old one, clean up the old file
+                    if (uploadedTuteFilename && currentRow.tuteUrl && currentRow.tuteUrl !== uploadedTuteFilename) {
+                        const oldPdfPath = path.join(__dirname, '..', 'uploads', currentRow.tuteUrl);
+                        fs.unlink(oldPdfPath, err => { if (err && err.code !== 'ENOENT') console.error(err); });
+                    }
+
                     await queryPromise(
-                        `UPDATE lectures SET lectureTitle=?, lectureDuration=?, lectureUrl=?, isPreviewFree=?, lectureOrder=? WHERE lecture_id=?`,
+                        `UPDATE lectures SET lectureTitle=?, lectureDuration=?, lectureUrl=?, isPreviewFree=?, lectureOrder=?, tuteUrl=? WHERE lecture_id=?`,
                         [
                             newLecture.lectureTitle,
                             Number(newLecture.lectureDuration),
                             newLecture.lectureUrl,
                             newLecture.isPreviewFree ? 1 : 0,
                             newLecture.lectureOrder,
+                            finalTuteUrl,
                             newLecture.lecture_id
                         ]
                     );
                     keptLectureIds.push(newLecture.lecture_id);
                 } else {
-                    // Insert new lecture
+                    // New lecture: look up its PDF via the client-side id the frontend generated
+                    const uploadedTuteFilename = newLecture.clientId
+                        ? tuteFileMap[`new_${newLecture.clientId}`] || null
+                        : null;
+
                     const result = await queryPromise(
-                        `INSERT INTO lectures (chapter_id, lectureTitle, lectureDuration, lectureUrl, isPreviewFree, lectureOrder) VALUES (?,?,?,?,?,?)`,
+                        `INSERT INTO lectures (chapter_id, lectureTitle, lectureDuration, lectureUrl, isPreviewFree, lectureOrder, tuteUrl) VALUES (?,?,?,?,?,?,?)`,
                         [
                             chapterId,
                             newLecture.lectureTitle,
                             Number(newLecture.lectureDuration),
                             newLecture.lectureUrl,
                             newLecture.isPreviewFree ? 1 : 0,
-                            newLecture.lectureOrder
+                            newLecture.lectureOrder,
+                            uploadedTuteFilename
                         ]
                     );
                     keptLectureIds.push(result.insertId);
                 }
             }
 
-            // 5. Delete lectures that are no longer present (and clean up their assignments/quizzes)
+            // 5. Delete lectures that are no longer present (and clean up their assignments/quizzes/PDFs)
             const toDeleteLectures = existingLectures.filter(l => !keptLectureIds.includes(l.lecture_id));
             for (const del of toDeleteLectures) {
                 // Delete assignments and submissions
@@ -380,6 +439,12 @@ exports.updateCourse = async (req, res) => {
                     await queryPromise("DELETE FROM quizzes WHERE quiz_id = ?", [quiz.quiz_id]);
                 }
 
+                // Clean up this lecture's tutorial PDF, if any
+                if (del.tuteUrl) {
+                    const fp = path.join(__dirname, '..', 'uploads', del.tuteUrl);
+                    fs.unlink(fp, err => { if (err && err.code !== 'ENOENT') console.error(err); });
+                }
+
                 // Finally delete the lecture
                 await queryPromise("DELETE FROM lectures WHERE lecture_id = ?", [del.lecture_id]);
             }
@@ -388,8 +453,8 @@ exports.updateCourse = async (req, res) => {
         // 6. Delete chapters that were completely removed
         const toDeleteChapters = existingChapters.filter(ch => !keptChapterIds.includes(ch.chapter_id));
         for (const delChapter of toDeleteChapters) {
-            // Delete all lectures inside (with their assignments/quizzes)
-            const lecturesInChapter = await queryPromise("SELECT lecture_id FROM lectures WHERE chapter_id = ?", [delChapter.chapter_id]);
+            // Delete all lectures inside (with their assignments/quizzes/PDFs)
+            const lecturesInChapter = await queryPromise("SELECT lecture_id, tuteUrl FROM lectures WHERE chapter_id = ?", [delChapter.chapter_id]);
             for (const lec of lecturesInChapter) {
                 // Reuse cleanup logic (assignments + quizzes)
                 const assignments = await queryPromise("SELECT assignment_id FROM assignments WHERE lecture_id = ?", [lec.lecture_id]);
@@ -401,6 +466,10 @@ exports.updateCourse = async (req, res) => {
                 for (const quiz of quizzes) {
                     await queryPromise("DELETE FROM quiz_attempts WHERE quiz_id = ?", [quiz.quiz_id]);
                     await queryPromise("DELETE FROM quizzes WHERE quiz_id = ?", [quiz.quiz_id]);
+                }
+                if (lec.tuteUrl) {
+                    const fp = path.join(__dirname, '..', 'uploads', lec.tuteUrl);
+                    fs.unlink(fp, err => { if (err && err.code !== 'ENOENT') console.error(err); });
                 }
                 await queryPromise("DELETE FROM lectures WHERE lecture_id = ?", [lec.lecture_id]);
             }

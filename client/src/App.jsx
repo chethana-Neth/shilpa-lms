@@ -29,7 +29,9 @@ import EditAssignment from './pages/educator/EditAssignment';     // NEW
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import PendingEducators from './pages/admin/PendingEducators';
-import AdminAnalytics from './pages/admin/AdminAnalytics';        // NEW
+import AdminAnalytics from './pages/admin/AdminAnalytics';    
+import RevenueDashboard from './pages/admin/RevenueDashboard';    // NEW
+import AdminUsers from './pages/admin/AdminUsers';
 
 // Auth pages
 import Login from './pages/login';
@@ -105,6 +107,8 @@ const App = () => {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="pending-educators" element={<PendingEducators />} />
           <Route path="analytics" element={<AdminAnalytics />} />
+          <Route path="revenue" element={<RevenueDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
         </Route>
 
         {/* Educator routes – only for role 'educator' */}

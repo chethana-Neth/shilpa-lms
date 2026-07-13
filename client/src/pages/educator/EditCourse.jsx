@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useContext } from 'react'
 import { useParams } from 'react-router-dom'
+import uniqid from 'uniqid'
 import Quill from 'quill'
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -24,12 +25,23 @@ const EditCourse = () => {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [loading, setLoading] = useState(true)
 
+    // Maps a lecture key -> the actual PDF File object selected for upload.
+    // Key format: `existing_<lecture_id>` for lectures already in the DB,
+    // or `new_<clientId>` for lectures added during this edit session
+    // (since they don't have a lecture_id yet).
+    const [tuteFiles, setTuteFiles] = useState({})
+
     const [lectureDetails, setLectureDetails] = useState({
         lectureTitle: '',
         lectureDuration: '',
         lectureUrl: '',
         isPreviewFree: false,
+        tuteFile: null,
     })
+
+    // Helper: consistent key for a lecture, whether it's existing or newly added
+    const lectureKey = (lecture) =>
+        lecture.lecture_id ? `existing_${lecture.lecture_id}` : `new_${lecture.clientId}`
 
     useEffect(() => {
         const loadCourse = async () => {
@@ -68,6 +80,7 @@ const EditCourse = () => {
                         lectureUrl: lec.lectureUrl,
                         isPreviewFree: !!lec.isPreviewFree,
                         lectureOrder: lec.lectureOrder,
+                        tuteUrl: lec.tuteUrl || null, // existing PDF filename from DB, if any
                     }))
                 }))
 
@@ -139,7 +152,16 @@ const EditCourse = () => {
             setChapters(chapters.map(ch => {
                 if (ch.chapter_id === chapterId) {
                     const updated = [...ch.chapterContent]
-                    updated.splice(lectureIndex, 1)
+                    const [removed] = updated.splice(lectureIndex, 1)
+                    // Clean up any pending PDF selected for the removed lecture
+                    if (removed) {
+                        const key = lectureKey(removed)
+                        setTuteFiles(prev => {
+                            const next = { ...prev }
+                            delete next[key]
+                            return next
+                        })
+                    }
                     return { ...ch, chapterContent: updated }
                 }
                 return ch
@@ -153,10 +175,13 @@ const EditCourse = () => {
             return toast.error("Please enter a valid lecture duration.")
         if (!lectureDetails.lectureUrl.trim()) return toast.error("Lecture URL is required.")
 
+        const newClientId = uniqid()
+
         setChapters(chapters.map(ch => {
             if (ch.chapter_id === currentChapterId) {
                 const newLecture = {
-                    lecture_id: null,               
+                    lecture_id: null,
+                    clientId: newClientId, // used to match the PDF file back to this lecture on submit
                     lectureTitle: lectureDetails.lectureTitle,
                     lectureDuration: Number(lectureDetails.lectureDuration),
                     lectureUrl: lectureDetails.lectureUrl,
@@ -164,13 +189,34 @@ const EditCourse = () => {
                     lectureOrder: ch.chapterContent.length > 0
                         ? ch.chapterContent[ch.chapterContent.length - 1].lectureOrder + 1
                         : 1,
+                    tuteUrl: null,
                 }
                 return { ...ch, chapterContent: [...ch.chapterContent, newLecture] }
             }
             return ch
         }))
+
+        if (lectureDetails.tuteFile) {
+            setTuteFiles(prev => ({ ...prev, [`new_${newClientId}`]: lectureDetails.tuteFile }))
+        }
+
         setShowPopup(false)
-        setLectureDetails({ lectureTitle: '', lectureDuration: '', lectureUrl: '', isPreviewFree: false })
+        setLectureDetails({ lectureTitle: '', lectureDuration: '', lectureUrl: '', isPreviewFree: false, tuteFile: null })
+    }
+
+    // Attach/replace a PDF for an already-existing (or already-added-this-session) lecture,
+    // directly from the lecture row rather than the Add Lecture popup.
+    const handleTuteFileSelect = (chapterId, lectureIndex, file) => {
+        setChapters(chapters.map(ch => {
+            if (ch.chapter_id === chapterId) {
+                const updated = [...ch.chapterContent]
+                const lecture = updated[lectureIndex]
+                const key = lectureKey(lecture)
+                setTuteFiles(prev => ({ ...prev, [key]: file }))
+                return ch // tuteUrl display updates via tuteFiles map, no need to mutate lecture itself here
+            }
+            return ch
+        }))
     }
 
     const handleSubmit = async (e) => {
@@ -186,9 +232,15 @@ const EditCourse = () => {
             formData.append('courseDescription', descriptionHtml)
             formData.append('coursePrice', Number(coursePrice))
             formData.append('discount', Number(discount))
-            // Send chapters with original IDs (null for new ones)
+            // Send chapters with original IDs (null for new ones), including tuteUrl/clientId
             formData.append('chapters', JSON.stringify(chapters))
             if (image) formData.append('courseThumbnail', image)
+
+            // Attach any newly selected tutorial PDFs, field-named so the backend
+            // can match them back to the right lecture (existing or new).
+            Object.entries(tuteFiles).forEach(([key, file]) => {
+                formData.append(`tute_${key}`, file, file.name)
+            })
 
             const { data } = await axios.put(
                 `${backendUrl}/api/courses/${id}`,
@@ -281,16 +333,49 @@ const EditCourse = () => {
 
                             {!chapter.collapsed && (
                                 <div className='p-4'>
-                                    {chapter.chapterContent.map((lecture, lectureIndex) => (
-                                        <div key={lecture.lecture_id || `new-lecture-${lectureIndex}`} className='flex justify-between items-center mb-2'>
-                                            <span className='text-sm'>
-                                                {lectureIndex + 1} {lecture.lectureTitle} ({lecture.lectureDuration} min) {lecture.isPreviewFree ? '- Free' : ''}
-                                            </span>
-                                            <img src={assets.cross_icon} alt=""
-                                                onClick={() => handleLecture('remove', chapter.chapter_id, lectureIndex)}
-                                                className='cursor-pointer w-3' />
-                                        </div>
-                                    ))}
+                                    {chapter.chapterContent.map((lecture, lectureIndex) => {
+                                        const key = lectureKey(lecture)
+                                        const pendingFile = tuteFiles[key]
+                                        return (
+                                            <div key={lecture.lecture_id || `new-lecture-${lectureIndex}`} className='mb-3 pb-3 border-b border-gray-100 last:border-0'>
+                                                <div className='flex justify-between items-center'>
+                                                    <span className='text-sm'>
+                                                        {lectureIndex + 1} {lecture.lectureTitle} ({lecture.lectureDuration} min) {lecture.isPreviewFree ? '- Free' : ''}
+                                                    </span>
+                                                    <img src={assets.cross_icon} alt=""
+                                                        onClick={() => handleLecture('remove', chapter.chapter_id, lectureIndex)}
+                                                        className='cursor-pointer w-3' />
+                                                </div>
+
+                                                {/* Tutorial PDF: show current state + let educator attach/replace */}
+                                                <div className='flex items-center gap-2 mt-1 flex-wrap'>
+                                                    {pendingFile ? (
+                                                        <span className='text-xs text-green-600'>📄 New PDF selected: {pendingFile.name}</span>
+                                                    ) : lecture.tuteUrl ? (
+                                                        <a href={`${backendUrl}/uploads/${lecture.tuteUrl}`} target='_blank' rel='noopener noreferrer'
+                                                            className='text-xs text-red-600 hover:underline'>
+                                                            📄 Current PDF attached (view)
+                                                        </a>
+                                                    ) : (
+                                                        <span className='text-xs text-gray-400'>No tutorial PDF attached</span>
+                                                    )}
+                                                    <label className='text-xs text-blue-600 hover:underline cursor-pointer'>
+                                                        {lecture.tuteUrl || pendingFile ? 'Replace PDF' : 'Attach PDF'}
+                                                        <input
+                                                            type='file'
+                                                            accept='application/pdf'
+                                                            hidden
+                                                            onChange={(e) => {
+                                                                if (e.target.files[0]) {
+                                                                    handleTuteFileSelect(chapter.chapter_id, lectureIndex, e.target.files[0])
+                                                                }
+                                                            }}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
 
                                     <div className='inline-flex bg-gray-100 p-2 rounded cursor-pointer mt-2 text-sm'
                                         onClick={() => handleLecture('add', chapter.chapter_id)}>
@@ -350,6 +435,14 @@ const EditCourse = () => {
                                 <input type="text" className='mb-3 block w-full border p-2'
                                     value={lectureDetails.lectureUrl}
                                     onChange={e => setLectureDetails({ ...lectureDetails, lectureUrl: e.target.value })} />
+
+                                <p className='text-sm mb-1'>Tutorial PDF (optional)</p>
+                                <input type="file" accept="application/pdf" className='mb-3 block w-full text-sm'
+                                    onChange={(e) => setLectureDetails({ ...lectureDetails, tuteFile: e.target.files[0] || null })} />
+                                {lectureDetails.tuteFile && (
+                                    <p className='text-xs text-green-600 mb-3 -mt-2'>Selected: {lectureDetails.tuteFile.name}</p>
+                                )}
+
                                 <div className='flex items-center gap-2 mb-4'>
                                     <input type="checkbox" id="isPreviewEdit"
                                         checked={lectureDetails.isPreviewFree}

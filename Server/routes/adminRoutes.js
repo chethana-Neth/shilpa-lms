@@ -7,12 +7,19 @@ const {
     rejectEducator,
     getStudentProgress,
     getQuizPerformance,
-    getAssignmentPerformance
+    getAssignmentPerformance,
+    getRevenueAnalytics,
+    getAllUsers,
+    toggleUserStatus,
+    deleteUser,
+    getStudentEnrollments,
+    getEducatorCourses,
+    updateUser
 } = require('../controllers/adminController');
 
-// All routes require admin authentication
 router.use(verifyJWT, isAdmin);
 
+// Educator approval
 router.get('/pending-educators', getPendingEducators);
 router.put('/approve-educator/:id', approveEducator);
 router.delete('/reject-educator/:id', rejectEducator);
@@ -21,5 +28,14 @@ router.delete('/reject-educator/:id', rejectEducator);
 router.get('/analytics/student-progress', getStudentProgress);
 router.get('/analytics/quiz-performance', getQuizPerformance);
 router.get('/analytics/assignment-performance', getAssignmentPerformance);
+router.get('/analytics/revenue', getRevenueAnalytics);
+
+// User management
+router.get('/users', getAllUsers);
+router.put('/users/:id/toggle-status', toggleUserStatus);
+router.put('/users/:id', updateUser);
+router.delete('/users/:id', deleteUser);
+router.get('/users/:id/enrollments', getStudentEnrollments);
+router.get('/users/:id/courses', getEducatorCourses);
 
 module.exports = router;

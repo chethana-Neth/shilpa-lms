@@ -32,7 +32,7 @@ app.use('/api/progress', progressRoutes);
 app.use('/uploads', express.static('uploads'));
 app.use('/api/password', passwordRoutes);
 app.use('/api/admin', adminRoutes);
-
+app.use('/api/ratings', require('./routes/ratingRoutes'));
 
 app.get('/', (req, res) => res.json("Server is running and healthy"));
 
