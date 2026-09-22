@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from "../context/AppContext";
 import axios from 'axios';
+import { GoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
   const { setShowLogin, loginUser, setShowRegister } = useContext(AppContext);
@@ -62,6 +63,35 @@ const Login = () => {
       } else {
         setError("Invalid Email or Password.");
       }
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setError('');
+    try {
+      const response = await axios.post('http://localhost:8081/api/auth/google', {
+        token: credentialResponse.credential
+      });
+
+      if (response.data.Login === true) {
+        loginUser(response.data.user, response.data.token);
+        setShowLogin(false);
+
+        const userRole = response.data.user.role;
+        if (userRole === 'Admin') {
+          navigate('/admin', { replace: true });
+        } else if (userRole === 'educator') {
+          navigate('/educator', { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
+      } else {
+        setError(response.data.Message || "Google sign-in failed");
+      }
+    } catch (err) {
+      console.error("Google Login Error:", err);
+      const backendMsg = err.response?.data?.Message;
+      setError(backendMsg || "Google sign-in failed. Please try again.");
     }
   };
 
@@ -146,17 +176,6 @@ const Login = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 py-2">
-            <input
-              type="checkbox"
-              id="remember"
-              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-            />
-            <label htmlFor="remember" className="text-sm font-semibold text-gray-800 cursor-pointer">
-              Remember for 30 days
-            </label>
-          </div>
-
           <button
             type="submit"
             className="w-full py-3.5 bg-[#6366f1] hover:bg-[#5356e3] text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-100 active:scale-[0.98]"
@@ -173,10 +192,16 @@ const Login = () => {
         </div>
 
         <div className="mt-8 space-y-6">
-          <button className="w-full flex items-center justify-center gap-3 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors group">
-            <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="Google" />
-            <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900">Sign in with Google</span>
-          </button>
+          <div className="w-full flex justify-center [&>div]:w-full">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError("Google sign-in failed. Please try again.")}
+              theme="outline"
+              size="large"
+              width="100%"
+              text="signin_with"
+            />
+          </div>
 
           <p className="text-center text-sm font-medium text-gray-600">
             Don't have an account?

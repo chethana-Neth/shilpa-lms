@@ -42,7 +42,7 @@ const AdminAnalytics = () => {
     fetchAnalytics();
   }, [backendUrl]);
 
-  // Average completion % per course (aggregated from per-student rows)
+  // Average completion % per course 
   const courseCompletionMap = {};
   studentProgress.forEach((row) => {
     if (!courseCompletionMap[row.course_title]) {

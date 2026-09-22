@@ -138,9 +138,7 @@ const getAssignmentPerformance = async (req, res) => {
 // REVENUE ANALYTICS
 // =========================================================
 
-// Revenue grouped by week or month, within an optional date range.
-// Reads from the payments table (status = 'success' only), matching
-// exactly what enrollmentController's getPaymentHistory/getStudentsEnrolled use.
+
 const getRevenueAnalytics = async (req, res) => {
     try {
         const { groupBy = 'monthly', startDate, endDate } = req.query;

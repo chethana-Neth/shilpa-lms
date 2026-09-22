@@ -21,6 +21,13 @@ const User = {
     db.query(sql, values, callback);
   },
 
+  // Create a user coming from Google sign-in (auto-approved)
+  createGoogleUser: (username, email, hashedRandomPassword, callback) => {
+    const sql = "INSERT INTO users (username, email, password, status) VALUES (?, ?, ?, 'approved')";
+    const values = [username, email, hashedRandomPassword];
+    db.query(sql, values, callback);
+  },
+
   // Assign a role to a user
   assignRole: (userId, roleName, callback) => {
     const roleSql = "SELECT id FROM roles WHERE role_name = ?";

@@ -12,6 +12,7 @@ const assignmentRoutes = require('./routes/assignmentRoutes');
 const passwordRoutes = require('./routes/passwordRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const progressRoutes = require('./routes/progressRoutes');
+const noticeRoutes = require('./routes/noticeRoutes');
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/notices', noticeRoutes);
 
 app.use('/uploads', express.static('uploads'));
 app.use('/api/password', passwordRoutes);

@@ -18,8 +18,9 @@ const queryPromise = (sql, params) => {
 // 1. FETCH ALL COURSES
 exports.getAllCourses = (req, res) => {
     const sql = `
-        SELECT c.*, COUNT(e.enroll_id) as enrolledStudentsCount
+        SELECT c.*, u.username as educatorName, COUNT(e.enroll_id) as enrolledStudentsCount
         FROM courses c
+        JOIN users u ON c.educator_id = u.id
         LEFT JOIN enrollments e ON c._id = e.course_id
         GROUP BY c._id`;
 
@@ -101,9 +102,7 @@ exports.addCourse = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid chapters JSON." });
         }
 
-        // req.files is an array here (from upload.any()). Separate the course
-        // thumbnail from the per-lecture tutorial PDFs, which are field-named
-        // `tute_<clientLectureId>` by the frontend.
+       
         const filesArray = req.files || [];
         const thumbnailFile = filesArray.find(f => f.fieldname === 'courseThumbnail');
         const courseThumbnail = thumbnailFile ? thumbnailFile.filename : '';
@@ -142,7 +141,7 @@ exports.addCourse = async (req, res) => {
 
             if (chapter.chapterContent && chapter.chapterContent.length > 0) {
                 for (const lecture of chapter.chapterContent) {
-                    // Look up the tutorial PDF for this lecture, if the educator attached one
+                    
                     const tuteUrl = tuteFileMap[lecture.lectureId] || null;
 
                     await queryPromise(
@@ -288,9 +287,7 @@ exports.updateCourse = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid chapters JSON." });
         }
 
-        // req.files is an array here (from upload.any()). Separate the course
-        // thumbnail from the per-lecture tutorial PDFs. Frontend field-names
-        // these as tute_existing_<lecture_id> or tute_new_<clientId>.
+        
         const filesArray = req.files || [];
         const thumbnailFile = filesArray.find(f => f.fieldname === 'courseThumbnail');
 

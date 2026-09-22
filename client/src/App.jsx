@@ -24,6 +24,7 @@ import AddQuiz from './pages/educator/AddQuiz';
 import AddAssignment from './pages/educator/AddAssignment';
 import EditQuiz from './pages/educator/EditQuiz';                 // NEW
 import EditAssignment from './pages/educator/EditAssignment';     // NEW
+import ManageNotices from './pages/educator/ManageNotices';
 
 // Admin pages
 import AdminLayout from './pages/admin/AdminLayout';
@@ -138,6 +139,7 @@ const App = () => {
           {/* NEW: Edit routes */}
           <Route path="edit-quiz/:quizId" element={<EditQuiz />} />
           <Route path="edit-assignment/:assignmentId" element={<EditAssignment />} />
+          <Route path="manage-notices/:courseId" element={<ManageNotices />} />
         </Route>
       </Routes>
     </div>

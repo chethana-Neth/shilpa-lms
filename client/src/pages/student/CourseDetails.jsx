@@ -25,6 +25,7 @@ const CourseDetails = () => {
   const [userRating, setUserRating] = useState(0)
   const [ratingStats, setRatingStats] = useState({ average: 0, count: 0 })
   const [ratingSubmitting, setRatingSubmitting] = useState(false)
+  const [notices, setNotices] = useState([])
 
   const {
     backendUrl,
@@ -111,7 +112,6 @@ const CourseDetails = () => {
     }
   }
 
-  // Fetch course rating stats + this student's existing rating
   const fetchRatingData = async () => {
     try {
       const statsRes = await axios.get(`${backendUrl}/api/ratings/course/${id}`)
@@ -130,7 +130,6 @@ const CourseDetails = () => {
     }
   }
 
-  // Submit or update this student's rating
   const handleRating = async (value) => {
     if (!userData?.id) return toast.error('Please log in to rate this course.')
     if (!hasFullAccess) return toast.error('You must be enrolled to rate this course.')
@@ -150,6 +149,15 @@ const CourseDetails = () => {
       toast.error(error.response?.data?.message || 'Failed to submit rating.')
     } finally {
       setRatingSubmitting(false)
+    }
+  }
+
+  const fetchNotices = async () => {
+    try {
+      const { data } = await axios.get(`${backendUrl}/api/notices/${id}`)
+      if (data.success) setNotices(data.notices)
+    } catch (error) {
+      console.error('Error fetching notices', error)
     }
   }
 
@@ -217,6 +225,7 @@ const CourseDetails = () => {
     }
   }, [courseData, isEducator, enrollmentInfo])
   useEffect(() => { fetchRatingData() }, [id, userData])
+  useEffect(() => { fetchNotices() }, [id])
 
   useEffect(() => {
     const script = document.createElement('script')
@@ -335,7 +344,7 @@ const CourseDetails = () => {
             dangerouslySetInnerHTML={{ __html: courseData.courseDescription?.slice(0, 200) || '' }}>
           </p>
 
-          {/* Rating display — uses live ratingStats from DB */}
+          {/* Rating display */}
           <div className='flex items-center space-x-2 pt-3 pb-1 text-sm'>
             <p>{ratingStats.average || 0}</p>
             <div className='flex'>
@@ -354,6 +363,32 @@ const CourseDetails = () => {
           </div>
 
           <p className='text-sm'>Course by <span className='text-blue-600 underline'>{courseData.educatorName}</span></p>
+
+                   {/* ── NOTICES SECTION ── visible to enrolled students and educators */}
+          {(hasFullAccess || isEducator) && notices.length > 0 && (
+            <div className='pb-10 border-t border-gray-200 pt-6'>
+              <h3 className='text-xl font-semibold text-gray-800 mb-4'>
+                📢 Notices
+                <span className='text-sm font-normal text-gray-400 ml-2'>({notices.length})</span>
+              </h3>
+              <div className='flex flex-col gap-4'>
+                {notices.map((notice) => (
+                  <div key={notice.notice_id} className='bg-blue-50 border border-blue-100 rounded-xl p-4'>
+                    <h4 className='font-semibold text-gray-800 mb-1'>{notice.title}</h4>
+                    <p className='text-sm text-gray-600 leading-relaxed whitespace-pre-wrap'>
+                      {notice.message}
+                    </p>
+                    <p className='text-xs text-gray-400 mt-2'>
+                      {new Date(notice.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric', month: 'long', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Course Structure */}
           <div className='pt-8 text-gray-800'>
@@ -427,7 +462,7 @@ const CourseDetails = () => {
                                       className='text-blue-500 hover:underline'>Preview</button>
                                   )}
 
-                                  {/* Tutorial PDF - visible to anyone who can access this lecture's content */}
+                                  {/* Tutorial PDF */}
                                   {lecture.tuteUrl && (isEducator || hasFullAccess || (isPreview && !hasFullAccess)) && (
                                     <a
                                       href={`${backendUrl}/uploads/${lecture.tuteUrl}`}
@@ -600,6 +635,8 @@ const CourseDetails = () => {
             <h3 className='text-xl font-semibold text-gray-800'>Course Description</h3>
             <p className='pt-3 rich-text' dangerouslySetInnerHTML={{ __html: courseData.courseDescription || '' }}></p>
           </div>
+
+ 
 
           {/* Rate this Course — only visible to enrolled students */}
           {hasFullAccess && !isEducator && (

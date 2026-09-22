@@ -8,7 +8,7 @@ import Loading from '../../components/student/Loading'
 const MyCourses = () => {
   const { currency, allCourses, userData, fetchAllCourses, backendUrl } = useContext(AppContext)
   const [courses, setCourses] = useState(null)
-  const [deletingId, setDeletingId] = useState(null)   // tracks which course is being deleted
+  const [deletingId, setDeletingId] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -22,7 +22,6 @@ const MyCourses = () => {
   }, [allCourses, userData])
 
   const handleDelete = async (courseId, courseTitle) => {
-    // Confirm before deleting — this also prevents accidental taps on mobile
     const confirmed = window.confirm(
       `Are you sure you want to delete "${courseTitle}"?\n\nThis will also delete all chapters and lectures inside it.`
     )
@@ -30,12 +29,10 @@ const MyCourses = () => {
 
     try {
       setDeletingId(courseId)
-
       const { data } = await axios.delete(`${backendUrl}/api/courses/${courseId}`)
-
       if (data.success) {
         toast.success("Course deleted successfully.")
-        await fetchAllCourses()   // refresh list in context so table updates
+        await fetchAllCourses()
       } else {
         toast.error(data.message || "Failed to delete course.")
       }
@@ -49,6 +46,10 @@ const MyCourses = () => {
 
   const handleEdit = (courseId) => {
     navigate(`/educator/edit-course/${courseId}`)
+  }
+
+  const handleManageNotices = (courseId) => {
+    navigate(`/educator/manage-notices/${courseId}`)
   }
 
   if (!courses) return <Loading />
@@ -98,14 +99,20 @@ const MyCourses = () => {
                     {new Date(course.createdAt).toLocaleDateString()}
                   </td>
 
-                  {/* Edit + Delete buttons */}
+                  {/* Actions */}
                   <td className='px-4 py-3'>
-                    <div className='flex items-center gap-2'>
+                    <div className='flex items-center gap-2 flex-wrap'>
                       <button
                         onClick={() => handleEdit(course._id)}
                         className='px-3 py-1.5 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors'
                       >
                         Edit
+                      </button>
+                      <button
+                        onClick={() => handleManageNotices(course._id)}
+                        className='px-3 py-1.5 text-xs bg-green-500 hover:bg-green-600 text-white rounded transition-colors'
+                      >
+                        Notices
                       </button>
                       <button
                         onClick={() => handleDelete(course._id, course.courseTitle)}
